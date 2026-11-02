@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+work/
+outputs/
+.env*
+*.log
+*.mp4
+*.mov
+*.wav
+*.mp3

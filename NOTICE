@@ -1,0 +1,22 @@
+maliang-cut
+Copyright 2026 maliang-cut contributors
+
+This distribution includes modified portions of pyJianYingDraft 0.3.1,
+https://github.com/GuanYixuan/pyJianYingDraft, author gary318.
+Licensed under Apache License 2.0; see vendor/LICENSE and vendor/SOURCE.json.
+The legacy UI export controller is not distributed or callable.
+New workflow code and documentation are licensed under Apache License 2.0.
+Jianying is a separate application, not distributed by this project.
+
+Separately installed dependencies (not vendored in this archive):
+- pymediainfo 7.0.1: MIT
+- imageio 2.37.0: BSD-2-Clause
+- numpy 2.5.4: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+- pillow 13.0.0: MIT-CMU
+Their installed distributions retain their own licenses.
+
+Optional ASR adapter (original project code):
+- sherpa-onnx 1.13.8 is separately installed under Apache-2.0.
+- ONNX Runtime's own MIT and third-party notices remain with its distribution.
+- SenseVoiceSmall / FunAudioLLM, FunASR / Alibaba Group model weights are NOT distributed. They have a separate FunASR Model Open Source License Agreement v1.1; see licenses/FunASR-MODEL_LICENSE and references/asr.md.
+- No model is relicensed as part of this code package.
