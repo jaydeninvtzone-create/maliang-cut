@@ -49,7 +49,7 @@ def validate(plan_path,media_root,ffprobe='ffprobe'):
     if type(canvas['fps']) is not int: raise ValueError('Integer fps required')
     if not isinstance(p['clips'],list) or not p['clips']: raise ValueError('Clips required')
     tracks={}; ids=set(); cache={}; resolved=[]
-    allowed={'id','source','in','out','at','speed','volume','track','spoken','purpose','method','reason','transform','decision'}
+    allowed={'id','source','in','out','at','speed','volume','track','spoken','purpose','method','reason','transform','decision','keyframes'}
     for c in p['clips']:
         if set(c)-allowed: raise ValueError('Unknown clip field')
         cid=c.get('id')
@@ -87,6 +87,21 @@ def validate(plan_path,media_root,ffprobe='ffprobe'):
         track=c.get('track','main')
         if not isinstance(track,str) or not track: raise ValueError('Empty track')
         stop=at+(end-start)/speed
+        motion=c.get('keyframes',{})
+        if not isinstance(motion,dict): raise ValueError('keyframes must be an object')
+        motion_ranges={'uniform_scale':(.05,10),'position_x':(-2,2),'position_y':(-2,2),'rotation':(-360,360),'alpha':(0,1)}
+        if set(motion)-set(motion_ranges): raise ValueError('Unsupported keyframe property')
+        if 'uniform_scale' in motion and trans.get('scale_x',1)!=trans.get('scale_y',1): raise ValueError('Uniform motion requires equal X/Y scale')
+        for prop,points in motion.items():
+            if not isinstance(points,list) or len(points)<2: raise ValueError('Motion needs two points')
+            last_us=-1
+            for point in points:
+                if not isinstance(point,dict) or set(point)!={'time','value'}: raise ValueError('Keyframe needs time and value')
+                t=number(point['time'],0,stop-at,'keyframe time');us=round(t*1000000)
+                if us<=last_us: raise ValueError('Keyframe times must increase at microsecond precision')
+                last_us=us
+                number(point['value'],*motion_ranges[prop],'keyframe value')
+            if points[0]['time']!=0: raise ValueError('Motion must start at local time zero')
         tracks.setdefault(track,[]).append((at,stop,cid))
         resolved.append(dict(c,path=str(path),end_at=stop))
     if 'main' not in tracks: raise ValueError('Main track required')
@@ -120,6 +135,9 @@ def build(args):
             draft.append_track(d.TrackSpec(d.TrackType.video,name=name))
         for c in clips:
             segment=d.VideoSegment(d.VideoMaterial(c['path']),d.trange_seconds(c['at'],duration=c['end_at']-c['at']),source_timerange=d.trange_seconds(c['in'],duration=c['out']-c['in']),speed=c.get('speed',1),volume=c.get('volume',1),clip_settings=d.ClipSettings(**c.get('transform',{})))
+            for prop,points in c.get('keyframes',{}).items():
+                for point in points:
+                    segment.add_keyframe(getattr(d.KeyframeProperty,prop),round(point['time']*1000000),point['value'])
             draft.add_segment(segment,c.get('track','main'))
         for i,c in enumerate(p.get('captions',[])):
             name='caption_'+str(i);draft.append_track(d.TrackSpec(d.TrackType.text,name=name))
@@ -127,13 +145,13 @@ def build(args):
         draft.save()
         generated=Path(staging)/p['name']
         dump(generated/'maliang-plan.json',p)
-        dump(generated/'maliang-build.json',{'status':'DRAFT_CREATED_NOT_NATIVE_VERIFIED','duration':total,'source_hashes':{c['id']:hashlib.sha256(Path(c['path']).read_bytes()).hexdigest() for c in clips},'native_opened':False,'native_exported':False,'draft_sha256':hashlib.sha256((generated/'draft_content.json').read_bytes()).hexdigest(),'source_files':[{'path':c['path'],'sha256':hashlib.sha256(Path(c['path']).read_bytes()).hexdigest()} for c in clips],'shot_decisions':[{'id':c['id'],'method':c['method'],'reason':c['reason'],'decision':c['decision'],'implemented_parameters':{'speed':c.get('speed',1),'volume':c.get('volume',1),'transform':c.get('transform',{})},'visual_verification':'PENDING'} for c in clips]})
+        dump(generated/'maliang-build.json',{'status':'DRAFT_CREATED_NOT_NATIVE_VERIFIED','duration':total,'source_hashes':{c['id']:hashlib.sha256(Path(c['path']).read_bytes()).hexdigest() for c in clips},'native_opened':False,'native_exported':False,'draft_sha256':hashlib.sha256((generated/'draft_content.json').read_bytes()).hexdigest(),'source_files':[{'path':c['path'],'sha256':hashlib.sha256(Path(c['path']).read_bytes()).hexdigest()} for c in clips],'shot_decisions':[{'id':c['id'],'method':c['method'],'reason':c['reason'],'decision':c['decision'],'implemented_parameters':{'speed':c.get('speed',1),'volume':c.get('volume',1),'transform':c.get('transform',{}),'keyframes':c.get('keyframes',{})},'visual_verification':'PENDING'} for c in clips]})
         generated.rename(out)
     return {'draft':str(out),'duration':total,'status':'DRAFT_CREATED_NOT_NATIVE_VERIFIED'}
 
 def preview(args):
     p,clips,total=validate(args.plan,args.media_root,args.ffprobe)
-    if p.get('captions') or any(c.get('track','main')!='main' or c.get('transform') for c in clips):
+    if p.get('captions') or any(c.get('track','main')!='main' or c.get('transform') or c.get('keyframes') for c in clips):
         raise ValueError('Preview only supports untransformed main-track cuts without captions. Use native Jianying for this plan.')
     if args.out.exists():raise ValueError('Output exists')
     args.out.parent.mkdir(parents=True,exist_ok=True); ff=tool(args.ffmpeg)

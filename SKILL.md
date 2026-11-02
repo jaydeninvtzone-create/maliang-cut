@@ -9,6 +9,8 @@ description: Edit authorized spoken-video material with a content-led Jianying w
 
 以下路径以本 SKILL.md 所在目录为根；先执行 `python scripts/maliang.py doctor`（可切到此目录，或使用脚本绝对路径）。用当前宿主提供且已授权的电脑控制工具操作剪映；本包不安装或冒充宿主电脑控制能力。没有该能力时仍可生成计划和草稿，但明确原生打开/导出须在可用宿主完成。不要把旧版导出控制器当作新版替代方案。
 
+先读 `references/production-playbook.md`，落实素材诊断、关键片段、局部返修和交付。场景只在匹配表达目的时选用；关键帧按 `references/plan.md` 写入，未支持的效果不能填伪字段。
+
 ## 按内容剪
 
 先读/听原素材及用户新想法，保留真实人声和意思。删口误、重复和无意义停顿要逐句判断；不要仅靠静音长度自动删除换气、情绪或有用停顿。需要识别时先读 `references/asr.md`，可用同一入口的可选 `asr` 命令处理工作副本。模型须由用户环境已有或按其授权另行准备，本包不下载权重。若当前环境不能识别，先核实字幕或人工转写来源，不伪造逐字稿。
