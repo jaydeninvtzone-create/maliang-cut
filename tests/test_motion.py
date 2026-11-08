@@ -55,4 +55,46 @@ class MotionTests(unittest.TestCase):
         self.assertEqual(receipt['shot_decisions'][0]['implemented_parameters']['keyframes'],self.p['clips'][0]['keyframes'])
         self.assertEqual(receipt['shot_decisions'][0]['visual_verification'],'PENDING')
 
+
+class FocusTests(unittest.TestCase):
+    setUp=fixtures.PlanTests.setUp
+    tearDown=fixtures.PlanTests.tearDown
+    check=fixtures.PlanTests.check
+
+    def args(self, **options):
+        values = dict(plan=self.root/'plan.json', media_root=self.root, ffprobe='ffprobe',
+                      clip='a', name='sample_v2', out=self.root/'focused.json',
+                      start=.2, arrive=.6, leave=1.1, end=1.6, scale=1.35, x=.1, y=None,
+                      reason='Read the active button', verification='Check the button and subtitle')
+        values.update(options)
+        return SimpleNamespace(**values)
+
+    def test_focus_preserves_original_and_validates_new_plan(self):
+        self.p['clips'].append(dict(self.p['clips'][0], id='b', at=2))
+        self.check()
+        args = self.args()
+        before = args.plan.read_bytes()
+        with patch.object(m, 'probe', return_value=self.info):
+            self.assertEqual(m.focus(args)['status'], 'FOCUS_PLAN_CREATED')
+            result, _, _ = m.validate(args.out, self.root)
+        self.assertEqual(args.plan.read_bytes(), before)
+        self.assertEqual(result['clips'][1], self.p['clips'][1])
+        self.assertEqual(result['name'], 'sample_v2')
+        frames = result['clips'][0]['keyframes']['uniform_scale']
+        self.assertEqual([(f['time'], f['value']) for f in frames],
+                         [(0, 1), (.2, 1), (.6, 1.35), (1.1, 1.35), (1.6, 1)])
+
+    def test_invalid_timing_and_existing_motion_do_not_write(self):
+        self.check()
+        with patch.object(m, 'probe', return_value=self.info):
+            with self.assertRaisesRegex(ValueError, 'focus time'):
+                m.focus(self.args(end=2.1))
+        self.p['clips'][0]['keyframes'] = {'position_x': [{'time': 0, 'value': 0}, {'time': 1, 'value': .2}]}
+        self.check()
+        with patch.object(m, 'probe', return_value=self.info):
+            with self.assertRaisesRegex(ValueError, 'already has spatial keyframes'):
+                m.focus(self.args())
+        self.assertFalse(self.args().out.exists())
+
+
 if __name__=='__main__':unittest.main()

@@ -20,3 +20,14 @@ build回执绑定每个片段ID、选择理由、实际速度/音量/变换参�
 ## 关键帧动作（0.2.0）
 clip可带keyframes，支持uniform_scale、position_x、position_y、rotation、alpha，每项至少两个{time,value}点。time为变速后的片段局部秒，从0开始严格递增，不超过片段长度；不是源时间或全片时间。位置是剪映单位，非像素。
 例如：`"keyframes":{"uniform_scale":[{"time":0,"value":1},{"time":0.6,"value":1.18},{"time":2,"value":1.18}]}`表示推近后停留，不自动添加缓动。不将此例套用所有镜头。uniform_scale要求初始X/Y缩放相等。build写入原生数据并记录参数；preview明确拒绝此类计划。新增映射尚未通过原生播放观感验收。
+
+## 内置局部聚焦
+
+用于在一条已有剪辑计划的原生镜头里短暂放大操作区或作品细节。下例对片段 cut-07 在第 0.2 秒开始推进，第 0.6 秒到达，停到 1.2 秒，第 1.6 秒回位。秒数是变速后的片段内时间。scale 是到达后的绝对缩放，x/y 可省略，或按本计划的位置坐标填写。用实际镜头确认重点和字幕不被遮挡。
+
+```powershell
+python scripts/maliang.py focus project/plan.json --media-root project --clip cut-07 --name episode_v2 --out project/plan-focus.json --start 0.2 --arrive 0.6 --leave 1.2 --end 1.6 --scale 1.35 --reason "让观众看清导出按钮" --verification "在剪映播放本段，确认按钮完整且字幕清晰"
+python scripts/maliang.py build project/plan-focus.json --media-root project --out project/drafts/episode_v2
+```
+
+新计划存于原计划同目录，以保留相对素材路径。命令对指定片段写入现有的可编辑关键帧格式，保留原计划、时长和字幕。已有位置或缩放关键帧时返回提示，避免覆盖已有运动。打开新草稿后按正常速度核对动作与画面，再沿原流程导出。

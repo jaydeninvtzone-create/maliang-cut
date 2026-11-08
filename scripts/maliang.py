@@ -120,6 +120,74 @@ def validate(plan_path,media_root,ffprobe='ffprobe'):
         number(cap.get('size',8),1,100,'caption size');number(cap.get('y',-.8),-1,1,'caption y')
     return p,resolved,total
 
+def focus(args):
+    """Create a new editable plan with a local push, hold and return."""
+    original = args.plan.resolve()
+    output = args.out.resolve()
+    if original.parent != output.parent:
+        raise ValueError('Write the new plan beside its source so relative media paths stay valid')
+    if output.exists():
+        raise ValueError('Output exists; choose a new plan filename')
+    plan, clips, _ = validate(original, args.media_root, args.ffprobe)
+    if args.name == plan['name'] or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', args.name):
+        raise ValueError('Choose a new draft name using letters, digits, hyphen or underscore')
+    index = next((i for i, clip in enumerate(clips) if clip['id'] == args.clip), None)
+    if index is None:
+        raise ValueError('Unknown clip ID: ' + args.clip)
+    if not args.reason.strip() or not args.verification.strip():
+        raise ValueError('Record why this view helps and what to check in Jianying')
+    clip = plan['clips'][index]
+    resolved = clips[index]
+    duration = resolved['end_at'] - clip['at']
+    times = [number(t, 0, duration, 'focus time') for t in
+             (args.start, args.arrive, args.leave, args.end)]
+    micros = [round(t * 1_000_000) for t in times]
+    if not micros[0] < micros[1] <= micros[2] < micros[3]:
+        raise ValueError('Use start < arrive <= leave < end at microsecond precision')
+    transform = clip.get('transform', {})
+    base_scale = transform.get('scale_x', 1)
+    if base_scale != transform.get('scale_y', 1):
+        raise ValueError('Focus requires equal X/Y source scale')
+    target_scale = number(args.scale, .05, 10, 'focus scale')
+    if target_scale <= base_scale:
+        raise ValueError('Focus scale must exceed the clip base scale')
+    original_motion = clip.get('keyframes', {})
+    if {'uniform_scale', 'position_x', 'position_y'} & original_motion.keys():
+        raise ValueError('Clip already has spatial keyframes; revise those manually')
+    if clip['decision']['route'] != 'native':
+        raise ValueError('Apply focus to a native shot with a clean motion layer')
+    start, arrive, leave, end = times
+    properties = {'uniform_scale': (base_scale, target_scale)}
+    for axis, target in (('x', args.x), ('y', args.y)):
+        if target is not None:
+            base = transform.get('transform_' + axis, 0)
+            properties['position_' + axis] = (base, number(target, -2, 2, 'focus position'))
+    motion = dict(original_motion)
+    for prop, (base, target) in properties.items():
+        points = [(0, base)]
+        if micros[0] > 0:
+            points.append((start, base))
+        points.append((arrive, target))
+        if micros[2] > micros[1]:
+            points.append((leave, target))
+        points.append((end, base))
+        motion[prop] = [{'time': time, 'value': value} for time, value in points]
+    clip['keyframes'] = motion
+    method = '局部聚焦：推进、停留、回位'
+    if clip['method'].strip() == method:
+        raise ValueError('Choose a shot without a prior focus decision')
+    clip['decision'] = {
+        'route': 'native',
+        'alternatives': [{'method': clip['method'], 'tradeoff': clip['reason']}],
+        'verification': args.verification.strip(),
+    }
+    clip['method'] = method
+    clip['reason'] = args.reason.strip()
+    plan['name'] = args.name
+    dump(output, plan)
+    return {'status': 'FOCUS_PLAN_CREATED', 'plan': str(output), 'clip': args.clip}
+
+
 def build(args):
     p,clips,total=validate(args.plan,args.media_root,args.ffprobe)
     out=args.out.resolve()
@@ -213,6 +281,20 @@ def main():
         p=sub.add_parser(cmd);p.add_argument('plan',type=Path);p.add_argument('--media-root',type=Path,required=True);p.add_argument('--ffprobe',default='ffprobe')
         if cmd!='validate':p.add_argument('--out',type=Path,required=True)
         if cmd=='preview':p.add_argument('--ffmpeg',default='ffmpeg')
+    p = sub.add_parser('focus', help='Add editable push/hold/return keyframes to one clip')
+    p.add_argument('plan', type=Path)
+    p.add_argument('--media-root', type=Path, required=True)
+    p.add_argument('--ffprobe', default='ffprobe')
+    p.add_argument('--clip', required=True)
+    p.add_argument('--name', required=True, help='New Jianying draft name')
+    p.add_argument('--out', type=Path, required=True, help='New plan beside the original plan')
+    for phase in ('start', 'arrive', 'leave', 'end'):
+        p.add_argument('--' + phase, type=float, required=True, help='Clip-local timeline seconds')
+    p.add_argument('--scale', type=float, required=True)
+    p.add_argument('--x', type=float)
+    p.add_argument('--y', type=float)
+    p.add_argument('--reason', required=True)
+    p.add_argument('--verification', required=True)
     p=sub.add_parser('asr');p.add_argument('audio',type=Path);p.add_argument('--model-dir',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--language',choices=['zh','en','yue','ja','ko'],default='zh')
     p=sub.add_parser('register-draft');p.add_argument('draft',type=Path);p.add_argument('--draft-root',type=Path,required=True);p.add_argument('--media-root',type=Path,required=True)
     p=sub.add_parser('verify');p.add_argument('media',type=Path);p.add_argument('--ffmpeg',default='ffmpeg');p.add_argument('--ffprobe',default='ffprobe');p.add_argument('--duration',type=float)

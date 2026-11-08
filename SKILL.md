@@ -19,6 +19,8 @@ description: Edit authorized spoken-video material with a content-led Jianying w
 
 对重要镜头记录：原句、表达目的、画面、备选做法、选择理由、参数、验证片段。选择应回答观众是否更快看懂、结果是否更可信、阅读与人声是否完整。必要时做同内容的小样比较。用 `references/shot-decisions.md` 作为场景判断依据，不把它当固定模板。v2计划的decision由validate/build执行检查：有实质选择时列备选和取舍，简单直切可说明无需另做比较，所有镜头写清实际验证动作。机器只能检查结构与参数记录，不能替代审美判断。
 
+画面需要短暂放大看清细节、再回到原构图时，可从已核计划用内置 focus 生成局部推进、停留、回位。先确定片段、时间、聚焦位置和检查点，命令见 references/plan.md。已有空间关键帧时，沿当前工程继续改。
+
 ## 执行与修改
 
 1. `inspect` 探测授权素材；在项目目录写 `plan.json`，格式看 `references/plan.md`。支持的代码能力见该合同，不把未实现字段填进 JSON。
